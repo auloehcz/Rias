@@ -22,7 +22,7 @@ class Rias:
     def __init__(self, graph, update_rules, dt=1, ds=1):
         self.G = graph
         self.num_v = self.G.num_vertices()
-        self.in_degrees = self.G.get_in_degrees(np.arange(self.num_v))
+        self.out_degrees = self.G.get_out_degrees(np.arange(self.num_v))
         self.update_rules = update_rules
 
         self.timestep = 0
@@ -42,7 +42,7 @@ class Rias:
         # 2 + 1 dimensional Laplacian matrix
         self.L = self.create_laplacian()
 
-        self.win = self.create_window()
+        #self.win = self.create_window()
 
 
 
@@ -91,6 +91,7 @@ class Rias:
     @classmethod
     def init_lattice_1d(cls, N, vp_dict, update_rules, dt=1, ds=1, periodic=True):
         g = gt.lattice([N], periodic=periodic)
+        g.set_directed(False)
         for prop, vals in vp_dict.items():
             g.vp[prop] = g.new_vp("double", vals=vals)
         g.ep["weight"] = g.new_ep("double", val=1)
@@ -106,6 +107,7 @@ class Rias:
 
     def update_reality(self):
         for rule in self.update_rules:
+            print(self.L.todense())
             first_property = rule[0] # target to update
             second_property = rule[1] # source to take the second derivative of
             n_antiderivatives = rule[2] # how many antiderivatives first_property has
@@ -130,7 +132,7 @@ class Rias:
             # FIX!!-
             # update second property's antiderivatives using updated first_property
             for i in range(n_antiderivatives):
-                self.X[second_property].a += self.X[first_property].a
+                self.X[second_property].a += self.X[first_property].a / 1
 
             #for i in range(n_antiderivatives+1):
             self.H[first_property] = np.vstack((self.H[first_property],
@@ -153,17 +155,18 @@ class Rias:
         data = []
         for i, row in enumerate(self.A):
             for j, edge_length in enumerate(row):
-                coordinates.append((edge_length * self.time_dilation - 1, i, j))
-                data.append(-1)# / self.out_degrees[j] / self.time_dilation)
+                if edge_length:
+                    coordinates.append((edge_length * self.time_dilation - 1, i, j))
+                    data.append(-1)# / self.out_degrees[j])# / self.time_dilation)
 
         # diagonal values denoting in-degree of weight w
-        for w in range(int(self.max_size_history / self.time_dilation)):
-            self.G.ep[str(i)] = self.G.new_ep("bool", [True if i == w + 1 else False for w in self.G.ep["weight"]])
-            self.G.set_edge_filter(self.G.ep[str(i)])
-            in_degrees = self.G.get_in_degrees(np.arange(self.num_v))
-            for i, d in enumerate(in_degrees):
-                coordinates.append((w, i, i))
-                data.append(w)
+        for w in range(int(self.max_size_history // self.time_dilation)):
+            degrees = self.G.get_total_degrees(np.arange(self.num_v))
+            self.G.ep[str(w)] = self.G.new_ep("bool", [1 if i == w + 1 else 0 for w in self.G.ep["weight"]])
+            self.G.set_edge_filter(self.G.ep[str(w)])
+            for i, d in enumerate(degrees):
+                coordinates.append(((w - 1) * self.time_dilation, i, i))
+                data.append(d)
         self.G.set_edge_filter(None)
 
         coordinates = list(zip(*coordinates))
@@ -199,7 +202,7 @@ class Rias:
 
     def animate_plt(self):
         fig = plt.figure()
-        ax = plt.axes(xlim=(0, 1000), ylim=(-1000, 1000))
+        ax = plt.axes(xlim=(0, self.num_v), ylim=(-1000, 1000))
         line, = ax.plot([], [], lw=1)
 
         pause = False
@@ -219,7 +222,7 @@ class Rias:
             if not pause:
                 self.update_reality()
                 ax.annotate('timestep = ' + str(self.timestep), (100, 100))
-                x = np.linspace(0, 1000, 1000)
+                x = np.linspace(0, self.num_v, self.num_v)
                 y = self.X['position'].get_array()
                 line.set_data(x, y)
             return line,
@@ -235,20 +238,18 @@ def main():
     #                  'velocity': np.concatenate(((np.random.rand(500) - 0.5) * 5, np.zeros((500))))}
     #np.concatenate(([0], initial_states['position'], [0]))
     #np.concatenate(([0], initial_states['velocity'], [0]))
-    initial_states = {'position': np.fromfunction(lambda x: 10*np.sin(np.pi*x/500) + 1000, (1000,)),
-                        'velocity':np.fromfunction(lambda x: 10*np.cos(np.pi*x/500) + 25, (1000,))}
+    #initial_states = {'position': np.fromfunction(lambda x: 10*np.sin(np.pi*x/500) + 1000, (1000,)),
+    #                    'velocity':np.fromfunction(lambda x: 10*np.cos(np.pi*x/500) + 25, (1000,))}
 
     initial_states = {'position': np.concatenate([np.zeros(100) + 100, [200 - i for i in range(200)], np.zeros(700)+500]),
                         'velocity':np.zeros(1000)}
+    #initial_states = {'position': np.fromfunction(lambda x: 10*np.sin(np.pi*x/5) + 10, (10,)),
+    #                    'velocity':np.fromfunction(lambda x: 10*np.cos(np.pi*x/5), (10,))}
     reality = Rias.init_lattice_1d(1000, initial_states, [('velocity', 'position', 1)],
-                                   dt = 1, ds = 1/100, periodic=False)
+                                   dt = 1, ds = 1/20, periodic=True)
 
 
-    #initial_states = {'position': (np.random.rand(1000) - 0.5) * 500}
-    #reality = Rias.init_lattice_1d(1000, initial_states, [('position', 'position', 0, -1)],
-    #                               dt = 1/50, ds = 1/50, periodic=True)
-
-    print('asdfafd')
+    ##initial_states = {'position': (np.random.rand(1000) - 0.5) * 500}
     reality.animate_plt()
 
 
