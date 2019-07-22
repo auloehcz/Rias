@@ -22,7 +22,7 @@ class Rias:
     def __init__(self, graph, update_rules, dt=1, ds=1):
         self.G = graph
         self.num_v = self.G.num_vertices()
-        self.out_degrees = self.G.get_out_degrees(np.arange(self.num_v))
+        self.in_degrees = self.G.get_in_degrees(np.arange(self.num_v))
         self.update_rules = update_rules
 
         self.timestep = 0
@@ -37,10 +37,10 @@ class Rias:
         # dictionary of 1 + 1 dimensional History matrices for each state
         self.H = {key: np.array([value.get_array()]) for key, value in self.X.items()}
         # 2 dimensional Adjacency matrix
-        self.A = gt.adjacency(self.G, self.G.ep["space"]).toarray()
+        self.A = gt.adjacency(self.G, self.G.ep["weight"]).toarray()
         self.max_size_history= int(np.amax(self.A) * self.time_dilation)
-        # 2 + 1 dimensional Update matrix
-        self.U = self.create_update_matrix()
+        # 2 + 1 dimensional Laplacian matrix
+        self.L = self.create_laplacian()
 
         self.win = self.create_window()
 
@@ -93,7 +93,8 @@ class Rias:
         g = gt.lattice([N], periodic=periodic)
         for prop, vals in vp_dict.items():
             g.vp[prop] = g.new_vp("double", vals=vals)
-        g.ep["space"] = g.new_ep("double", val=1)
+        g.ep["weight"] = g.new_ep("double", val=1)
+        #g.ep["weight"] = g.new_ep("double", vals=[1 if i < 400 else 2 for i in range(1000)])
         if not periodic:
             g.self_loops = True
             g.add_edge_list([(0, 0), (N-1, N-1)])
@@ -108,37 +109,34 @@ class Rias:
             first_property = rule[0] # target to update
             second_property = rule[1] # source to take the second derivative of
             n_antiderivatives = rule[2] # how many antiderivatives first_property has
-            constant = rule[3] # multiplicative factor for first_property's first derivative
 
             # find delta to update first_property's first derivative wrt time
             # using second_property's second derivative (??) wrt space
-            current_state = self.X[second_property].get_array()
+            current_state = self.X[second_property].a
 
+            #self.X[second_property][0] = 0.0
+            #self.X[first_property][0] = 0.0
+            #self.X[second_property][self.num_v-1] = 0.0
+            #self.X[first_property][self.num_v-1] = 0.0
 
-            self.X[second_property][0] = 0.0
-            self.X[first_property][0] = 0.0
-
-            self.X[second_property][self.num_v-1] = 0.0
-            self.X[first_property][self.num_v-1] = 0.0
-
-            gifts_from_neighbors = np.zeros(self.num_v)
-            for i, state in reversed(list(enumerate(self.H[second_property]))):
-                gifts_from_neighbors += self.U[i].dot(state)
-            delta = constant * (gifts_from_neighbors - current_state)
+            deltas = np.zeros(self.num_v)
+            for i, state in enumerate(reversed(self.H[second_property])):
+                deltas += self.L[i].dot(state)
+            #deltas -= current_state
 
             # Adjust velocities using data from positions
-            self.X[first_property].a += delta * self.delta_space
+            self.X[first_property].a += deltas * self.delta_space
 
             # FIX!!-
             # update second property's antiderivatives using updated first_property
             for i in range(n_antiderivatives):
                 self.X[second_property].a += self.X[first_property].a
 
-            for i in range(n_antiderivatives+1):
-                self.H[first_property] = np.vstack((self.H[first_property],
-                                                    self.X[first_property].a))
+            #for i in range(n_antiderivatives+1):
+            self.H[first_property] = np.vstack((self.H[first_property],
+                                                self.X[first_property].a))
             self.H[second_property] = np.vstack((self.H[second_property],
-            self.X[second_property].a))
+                                                self.X[second_property].a))
 
             if len(self.H[first_property]) > self.max_size_history:
                 self.H[first_property] = np.delete(self.H[first_property], (0), axis=0)
@@ -149,15 +147,25 @@ class Rias:
 
         self.t += self.delta_time
         self.timestep += 1
-        print(self.timestep)
 
-    def create_update_matrix(self):
+    def create_laplacian(self):
         coordinates = []
         data = []
         for i, row in enumerate(self.A):
             for j, edge_length in enumerate(row):
-                coordinates.append((edge_length*self.time_dilation-1, i, j))
-                data.append(1 / self.out_degrees[j] / self.time_dilation)
+                coordinates.append((edge_length * self.time_dilation - 1, i, j))
+                data.append(-1)# / self.out_degrees[j] / self.time_dilation)
+
+        # diagonal values denoting in-degree of weight w
+        for w in range(int(self.max_size_history / self.time_dilation)):
+            self.G.ep[str(i)] = self.G.new_ep("bool", [True if i == w + 1 else False for w in self.G.ep["weight"]])
+            self.G.set_edge_filter(self.G.ep[str(i)])
+            in_degrees = self.G.get_in_degrees(np.arange(self.num_v))
+            for i, d in enumerate(in_degrees):
+                coordinates.append((w, i, i))
+                data.append(w)
+        self.G.set_edge_filter(None)
+
         coordinates = list(zip(*coordinates))
         U = sp.COO(coordinates, data, shape=(self.max_size_history, self.num_v, self.num_v))
         return U
@@ -169,6 +177,7 @@ class Rias:
         pos = gt.planar_layout(self.G)
         win = gt.GraphWindow(self.G, pos, geometry=(100, 100),
                              vertex_fill_color=self.G.vp["position"])
+
         return win
 
     def update_window(self):
@@ -229,16 +238,17 @@ def main():
     initial_states = {'position': np.fromfunction(lambda x: 10*np.sin(np.pi*x/500) + 1000, (1000,)),
                         'velocity':np.fromfunction(lambda x: 10*np.cos(np.pi*x/500) + 25, (1000,))}
 
-    initial_states = {'position': np.concatenate([np.zeros(100), [200 - i for i in range(200)], np.zeros(700)]),
+    initial_states = {'position': np.concatenate([np.zeros(100) + 100, [200 - i for i in range(200)], np.zeros(700)+500]),
                         'velocity':np.zeros(1000)}
-    reality = Rias.init_lattice_1d(1000, initial_states, [('velocity', 'position', 1, 1)],
-                                   dt = 1, ds = 1/2, periodic=False)
+    reality = Rias.init_lattice_1d(1000, initial_states, [('velocity', 'position', 1)],
+                                   dt = 1, ds = 1/100, periodic=False)
 
 
     #initial_states = {'position': (np.random.rand(1000) - 0.5) * 500}
     #reality = Rias.init_lattice_1d(1000, initial_states, [('position', 'position', 0, -1)],
     #                               dt = 1/50, ds = 1/50, periodic=True)
 
+    print('asdfafd')
     reality.animate_plt()
 
 
