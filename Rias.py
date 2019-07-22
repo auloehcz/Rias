@@ -107,7 +107,6 @@ class Rias:
 
     def update_reality(self):
         for rule in self.update_rules:
-            print(self.L.todense())
             first_property = rule[0] # target to update
             second_property = rule[1] # source to take the second derivative of
             n_antiderivatives = rule[2] # how many antiderivatives first_property has
@@ -127,12 +126,12 @@ class Rias:
             #deltas -= current_state
 
             # Adjust velocities using data from positions
-            self.X[first_property].a += deltas * self.delta_space
+            self.X[first_property].a -= deltas * self.delta_space
 
             # FIX!!-
             # update second property's antiderivatives using updated first_property
             for i in range(n_antiderivatives):
-                self.X[second_property].a += self.X[first_property].a / 1
+                self.X[second_property].a += self.X[first_property].a
 
             #for i in range(n_antiderivatives+1):
             self.H[first_property] = np.vstack((self.H[first_property],
@@ -165,7 +164,7 @@ class Rias:
             self.G.ep[str(w)] = self.G.new_ep("bool", [1 if i == w + 1 else 0 for w in self.G.ep["weight"]])
             self.G.set_edge_filter(self.G.ep[str(w)])
             for i, d in enumerate(degrees):
-                coordinates.append(((w - 1) * self.time_dilation, i, i))
+                coordinates.append((w * self.time_dilation, i, i))
                 data.append(d)
         self.G.set_edge_filter(None)
 
@@ -223,7 +222,7 @@ class Rias:
                 self.update_reality()
                 ax.annotate('timestep = ' + str(self.timestep), (100, 100))
                 x = np.linspace(0, self.num_v, self.num_v)
-                y = self.X['position'].get_array()
+                y = self.X['position'].a)
                 line.set_data(x, y)
             return line,
 
@@ -238,15 +237,15 @@ def main():
     #                  'velocity': np.concatenate(((np.random.rand(500) - 0.5) * 5, np.zeros((500))))}
     #np.concatenate(([0], initial_states['position'], [0]))
     #np.concatenate(([0], initial_states['velocity'], [0]))
-    #initial_states = {'position': np.fromfunction(lambda x: 10*np.sin(np.pi*x/500) + 1000, (1000,)),
-    #                    'velocity':np.fromfunction(lambda x: 10*np.cos(np.pi*x/500) + 25, (1000,))}
+    initial_states = {'position': np.fromfunction(lambda x: 1000*np.sin(np.pi*x/500), (1000,)),
+                        'velocity':np.fromfunction(lambda x: np.cos(np.pi*x/50), (1000,))}
 
-    initial_states = {'position': np.concatenate([np.zeros(100) + 100, [200 - i for i in range(200)], np.zeros(700)+500]),
-                        'velocity':np.zeros(1000)}
+    #initial_states = {'position': np.concatenate([np.zeros(100) + 100, [200 - i for i in range(200)], np.zeros(700)+500]),
+    #                    'velocity':np.zeros(1000)}
     #initial_states = {'position': np.fromfunction(lambda x: 10*np.sin(np.pi*x/5) + 10, (10,)),
     #                    'velocity':np.fromfunction(lambda x: 10*np.cos(np.pi*x/5), (10,))}
     reality = Rias.init_lattice_1d(1000, initial_states, [('velocity', 'position', 1)],
-                                   dt = 1, ds = 1/20, periodic=True)
+                                   dt = 1, ds = 1/10, periodic=False)
 
 
     ##initial_states = {'position': (np.random.rand(1000) - 0.5) * 500}
