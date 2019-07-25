@@ -1,25 +1,9 @@
-# Main Functions
 import numpy as np
 import graph_tool.all as gt
 import sparse as sp
 import random
 
-# GUI and visualization
-from gi.repository import Gtk, Gdk, GdkPixbuf, GObject, GLib
-import matplotlib
-matplotlib.use("TkAgg")
-from matplotlib import pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.figure import Figure
-from matplotlib import animation
-import mpl_toolkits.mplot3d.axes3d as p3
-import tkinter as tk
-from tkinter import ttk
-
-import sys
-
-class Rias:
-
+class QuantumGraph:
 
     # Constructors ------------------------------------------------------------
 
@@ -46,8 +30,6 @@ class Rias:
         self.L = self.create_laplacian()
 
         #self.win = self.create_window()
-
-
 
     @classmethod
     def init_random(cls, num_attributes, min_vertices, max_vertices, min_attribute, max_attribute, min_edges, max_edges):
@@ -108,7 +90,7 @@ class Rias:
 
     # Core functions -------------------------------------------------------
 
-    def update_reality(self):
+    def update_graph(self):
         """Updates self in accordance to given update rules.
         """
 
@@ -181,170 +163,3 @@ class Rias:
         coordinates = list(zip(*coordinates))
         U = sp.COO(coordinates, data, shape=(self.max_size_history, self.num_v, self.num_v))
         return U
-
-
-    # Visualization -----------------------------------------------------------
-
-    def create_window(self):
-        pos = gt.planar_layout(self.G)
-        win = gt.GraphWindow(self.G, pos, geometry=(500, 100),
-                             vertex_fill_color=self.G.vp["position"])
-
-        return win
-
-    def update_window(self):
-        self.update_reality()
-        self.win.graph.regenerate_surface()
-        self.win.graph.queue_draw()
-        return True
-
-    def animate_graph(self):
-        # Bind the function above as an 'idle' callback.
-        cid = GLib.idle_add(self.update_window)
-
-        # We will give the user the ability to stop the program by closing the window.
-        self.win.connect("delete_event", Gtk.main_quit)
-
-        # Actually show the window, and start the main loop.
-        self.win.show_all()
-        Gtk.main()#
-
-
-
-class Visualizer(tk.Tk):
-    def __init__(self, *args, **kwargs):
-        tk.Tk.__init__(self, *args, **kwargs)
-
-        tk.Tk.iconbitmap(self)#, default="idk.jpg")
-        tk.Tk.wm_title(self, "RIAS")
-
-        container = tk.Frame(self)
-        container.pack(side="top", fill="both", expand=True)
-        container.grid_rowconfigure(0, weight=1)
-        container.grid_columnconfigure(0, weight=1)
-
-        self.frames = {}
-        for F in (StartPage, FirstPage):
-            frame = F(container, self)
-            self.frames[F] = frame
-            frame.grid(row=0, column=0, sticky="nesw")
-        print(self.frames.keys())
-
-        self.show_frame(StartPage)
-
-    def show_frame(self, cont):
-        frame = self.frames[cont]
-        frame.tkraise()
-
-
-class StartPage(tk.Frame):
-    def __init__(self, parent, controller):
-        tk.Frame.__init__(self, parent)
-        label = tk.Label(self, text="RIAS")
-        label.pack(pady=10, padx=10)
-
-        button = ttk.Button(self, text="Go to 1st page",
-                            command=lambda:controller.show_frame(FirstPage))
-        button.pack()
-
-
-class FirstPage(tk.Frame):
-    def __init__(self, parent, controller):
-        self.pause = False
-        tk.Frame.__init__(self, parent)
-        label = tk.Label(self, text="RIAS")
-        label.pack(pady=10, padx=10)
-
-        button1 = ttk.Button(self, text="Back to Home",
-                             command=lambda: controller.show_frame(StartPage))
-        button1.pack()
-
-        self.textBox=tk.Text(self, height=2, width=10)
-        self.textBox.pack()
-        buttonCommit=tk.Button(self, height=1, width=10, text="Commit",
-                            command=lambda: self.retrieve_input())
-        buttonCommit.pack()
-
-        initial_states = {'position': np.concatenate([np.zeros(100) + 100, [200 - i for i in range(200)], np.zeros(700)+500]),
-                            'velocity':np.zeros(1000)}
-        self.reality = Rias.init_lattice_1d(1000, initial_states, [('velocity', 'position', 1, -1)],
-                                   dt = 1, alpha = 1/5, periodic=True)
-
-
-
-        fig = plt.figure()
-        fig.canvas.mpl_connect('button_press_event', self.onClick)
-        self.ax = plt.axes(xlim=(0, self.reality.num_v), ylim=(-1000, 1000))
-        self.line, = self.ax.plot([], [], lw=1)
-
-        anim = animation.FuncAnimation(fig, self.animate, init_func=self.init_line,
-                                    frames=200, interval=20, blit=True)
-
-        canvas = FigureCanvasTkAgg(fig, self)
-        canvas.draw()
-        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-    def retrieve_input(self):
-        inputValue=self.textBox.get("1.0","end-1c")
-
-    # initialization function: plot the background of each frame
-    def init_line(self):
-        self.line.set_data([], [])
-        return self.line,
-
-    def onClick(self, event):
-        self.pause = not self.pause
-#
-    # animation function.  This is called sequentially
-    def animate(self, i):
-        if not self.pause:
-            self.reality.update_reality()
-            self.ax.annotate('timestep = ' + str(self.reality.timestep), (100, 100))
-            x = np.linspace(0, self.reality.num_v, self.reality.num_v)
-            y = self.reality.X['position'].a
-            self.line.set_data(x, y)
-        return self.line,
-
-
-
-def main():
-    if len(sys.argv) != 2:
-        raise Exception('Only one argument, please!')
-    arg = sys.argv[1]
-
-    if arg == 'wave':
-
-
-        #initial_states = {'position': (np.random.rand(1000) - 0.5) * 1000,
-        #                  'velocity': np.concatenate(((np.random.rand(500) - 0.5) * 5, np.zeros((500))))}
-        #initial_states = {'position': np.fromfunction(lambda x: 500*np.sin(np.pi*x/500 + 1000), (1000,)),
-        #                    'velocity':np.fromfunction(lambda x: np.cos(np.pi*x/50), (1000,))}
-        initial_states = {'position': np.concatenate([np.zeros(100) + 100, [200 - i for i in range(200)], np.zeros(700)+500]),
-                            'velocity':np.zeros(1000)}
-        #initial_states = {'position': np.fromfunction(lambda x: 10*np.sin(np.pi*x/5) + 10, (10,)),
-        #                    'velocity':np.fromfunction(lambda x: 10*np.cos(np.pi*x/5), (10,))}
-        #initial_states = {'position': np.concatenate([np.zeros(100), np.fromfunction(lambda x: 100*np.sin(np.pi*x/100), (100,))]),
-        #                'velocity':np.zeros(1000)}
-        reality = Rias.init_lattice_1d(1000, initial_states, [('velocity', 'position', 1, -1)],
-                                   dt = 1, alpha = 1/5, periodic=True)
-        reality.animate_plt()
-    elif arg == 'heat':
-        initial_states = {'position': (np.random.rand(500) - 0.5) * 500 + 500}
-        reality = Rias.init_lattice_1d(1000, initial_states, [('position', 'position', 0, -1)],
-                                    dt = 1, alpha = 1/10, periodic=True)
-        reality.animate_plt()
-    elif arg == '3d':
-        pass
-
-def main():
-    reality = Visualizer()
-    reality.mainloop()
-
-
-
-
-
-
-
-if __name__ == '__main__':
-    main()
