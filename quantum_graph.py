@@ -29,7 +29,6 @@ class QuantumGraph:
         # 2 + 1 dimensional Laplacian matrix
         self.L = self.create_laplacian()
 
-        #self.win = self.create_window()
 
     @classmethod
     def init_random(cls, num_attributes, min_vertices, max_vertices, min_attribute, max_attribute, min_edges, max_edges):
@@ -48,20 +47,21 @@ class QuantumGraph:
         return cls(g)
 
     @classmethod
-    def init_lattice_2d_4n(cls, lattice, periodic=True):
-        length = len(lattice)
-        width = len(lattice[0])
-        g = gt.Lattice([length, width], periodic=periodic)
-        num_vertices = g.num_vertices()
-        vals = [l for lst in lattice for l in lst]
-        g.vp["state"] = g.new_vp("double", vals=vals)
-        return cls(g)
+    def init_lattice_2d_4n(cls, vp_dict, update_rules, dt=1, alpha=1, periodic=True):
+        length = len(vp_dict[next(iter(vp_dict))])
+        width = len(vp_dict[next(iter(vp_dict))][0])
+        g = gt.lattice([length, width], periodic=periodic)
+        g.ep["weight"] = g.new_ep("double", val=1)
+        for prop_name, prop in vp_dict.items():
+            vals = [l for lst in prop for l in lst]
+            g.vp[prop_name] = g.new_vp("double", vals=vals)
+        return cls(g, update_rules, dt, alpha)
 
     @classmethod
     def init_lattice_2d_8n(cls, lattice, periodic=True):
         length = len(lattice)
         width = len(lattice[0])
-        g = gt.Lattice([length, width], periodic=periodic)
+        g = gt.lattice([length, width], periodic=periodic)
         num_vertices = g.num_vertices()
         vals = [l for lst in lattice for l in lst]
         g.vp["state"] = g.new_vp("double", vals=vals)
@@ -74,8 +74,9 @@ class QuantumGraph:
         return cls(g)
 
     @classmethod
-    def init_lattice_1d(cls, N, vp_dict, update_rules, dt=1, alpha=1, periodic=True):
-        g = gt.lattice([N], periodic=periodic)
+    def init_lattice_1d(cls, vp_dict, update_rules, dt=1, alpha=1, periodic=True):
+        length = len(vp_dict[next(iter(vp_dict))])
+        g = gt.lattice([length], periodic=periodic)
         g.set_directed(False)
         for prop, vals in vp_dict.items():
             g.vp[prop] = g.new_vp("double", vals=vals)
@@ -83,7 +84,7 @@ class QuantumGraph:
         #g.ep["weight"] = g.new_ep("double", vals=[1 if i < 400 else 2 for i in range(1000)])
         if not periodic:
             g.self_loops = True
-            g.add_edge_list([(0, 0), (N-1, N-1)])
+            g.add_edge_list([(0, 0), (length-1, length-1)])
         return cls(g, update_rules, dt, alpha)
 
 
@@ -123,7 +124,7 @@ class QuantumGraph:
             for i in range(n_antiderivatives):
                 self.X[second_property].a += self.X[first_property].a
 
-                #self.X[first_property].a -= constant * deltas * self.alpha / 2
+                #self.X[first_property].a -= constant * deltas * self.alpha / 20
 
             #for i in range(n_antiderivatives+1):
             self.H[first_property] = np.vstack((self.H[first_property],
@@ -152,6 +153,7 @@ class QuantumGraph:
 
         # diagonal values denoting in-degree of weight w
         for w in range(int(self.max_size_history // self.time_dilation)):
+            # Fix this
             degrees = self.G.get_total_degrees(np.arange(self.num_v))
             self.G.ep[str(w)] = self.G.new_ep("bool", [1 if i == w + 1 else 0 for w in self.G.ep["weight"]])
             self.G.set_edge_filter(self.G.ep[str(w)])
@@ -163,3 +165,13 @@ class QuantumGraph:
         coordinates = list(zip(*coordinates))
         U = sp.COO(coordinates, data, shape=(self.max_size_history, self.num_v, self.num_v))
         return U
+
+    def set_alpha(self, value):
+        self.alpha = value
+        return self.alpha
+
+    def get_timestep(self):
+        return self.timestep
+
+    def get_current_state(self, prop):
+        return self.X[prop].a
