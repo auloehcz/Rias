@@ -47,7 +47,7 @@ class QuantumGraph:
         return cls(g)
 
     @classmethod
-    def init_lattice_2d_4n(cls, vp_dict, update_rules, dt=1, alpha=1, periodic=True):
+    def lattice_2d_4n(cls, vp_dict, update_rules, dt=1, alpha=1, periodic=True):
         length = len(vp_dict[next(iter(vp_dict))])
         width = len(vp_dict[next(iter(vp_dict))][0])
         g = gt.lattice([length, width], periodic=periodic)
@@ -58,7 +58,7 @@ class QuantumGraph:
         return cls(g, update_rules, dt, alpha)
 
     @classmethod
-    def init_lattice_2d_8n(cls, lattice, periodic=True):
+    def lattice_2d_8n(cls, lattice, periodic=True):
         length = len(lattice)
         width = len(lattice[0])
         g = gt.lattice([length, width], periodic=periodic)
@@ -74,7 +74,7 @@ class QuantumGraph:
         return cls(g)
 
     @classmethod
-    def init_lattice_1d(cls, vp_dict, update_rules, dt=1, alpha=1, periodic=True):
+    def lattice_1d(cls, vp_dict, update_rules, dt=1, alpha=1, periodic=True):
         length = len(vp_dict[next(iter(vp_dict))])
         g = gt.lattice([length], periodic=periodic)
         g.set_directed(False)
@@ -82,9 +82,6 @@ class QuantumGraph:
             g.vp[prop] = g.new_vp("double", vals=vals)
         g.ep["weight"] = g.new_ep("double", val=1)
         #g.ep["weight"] = g.new_ep("double", vals=[1 if i < 400 else 2 for i in range(1000)])
-        if not periodic:
-            g.self_loops = True
-            g.add_edge_list([(0, 0), (length-1, length-1)])
         return cls(g, update_rules, dt, alpha)
 
 
@@ -119,7 +116,7 @@ class QuantumGraph:
             # Adjust velocities using data from positions
             self.X[first_property].a += constant * deltas * self.alpha
 
-            # FIX!!-
+            # FIX!!
             # update second property's antiderivatives using updated first_property
             for i in range(n_antiderivatives):
                 self.X[second_property].a += self.X[first_property].a

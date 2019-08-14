@@ -26,14 +26,15 @@ class MainWindow(Gtk.Window):
         self.add(self.notebook)
 
         self.page1 = WaveBox2D()
-        label1 = Gtk.Label('2D Wave Equation')
+        label1 = Gtk.Label()
+        label1.set_label('2D Wave Equation')
         self.page1.set_border_width(10)
         self.notebook.append_page(self.page1, label1)
 
-        #self.page2 = WaveBox3D()
-        #label2 = Gtk.Label('3D Wave Equation')
-        #self.page2.set_border_width(10)
-        #self.notebook.append_page(self.page2, label2)
+        self.page2 = WaveBox3D()
+        label2 = Gtk.Label('3D Wave Equation')
+        self.page2.set_border_width(10)
+        self.notebook.append_page(self.page2, label2)
 
 
 
@@ -42,18 +43,19 @@ class WaveBox2D(Gtk.VBox):
         Gtk.VBox.__init__(self)
 
         # Controls ------------------------------------------------------------
-        self.controls_box = Gtk.VBox(spacing=0)
+        self.controls_box = Gtk.Grid()
         self.pack_start(self.controls_box, False, False, 0)
         # Pause/unpause
         self.paused = True
         self.button_pause = Gtk.Button.new_with_label("start")
         self.button_pause.connect("clicked", self.pause)
-        self.controls_box.pack_start(self.button_pause, False, True, 0)
+        self.controls_box.attach(self.button_pause, 1, 1, 1, 1)
         # Alpha adjustment
         adjustment = Gtk.Adjustment(value=0.5, lower=0, upper=1, step_increment=.01)
         self.button_alpha = Gtk.SpinButton()
         self.button_alpha.configure(adjustment, .1, 2)
-        self.controls_box.pack_start(self.button_alpha, False, False, 0)
+        self.controls_box.attach(self.button_alpha, 1, 2, 2, 2)
+        # Reset
 
         # Plot ----------------------------------------------------------------
         self.plot_box = Gtk.VBox(spacing=0)
@@ -69,14 +71,15 @@ class WaveBox2D(Gtk.VBox):
         self.qg = qg.QuantumGraph.init_lattice_1d(initial_state, [('velocity', 'position', 1, -1)],
                                 dt = 1, alpha = 1/5, periodic=True)
 
-        self.fig = Figure()
-        self.ax= self.fig.add_subplot(111)
-        self.ax = plt.axes(xlim=(0, self.qg.num_v), ylim=(-1000, 1000))
-        self.line, = self.ax.plot([], [], lw=1)
-        self.timestamp = self.ax.annotate('timestep = ' +
+        self.fig, self.ax = plt.subplots(nrows=2, ncols=1)
+        self.timestamp = self.ax[1].annotate('timestep = ' +
                                         str(self.qg.get_timestep()),
                                         xy=(0.15, 0.9),
                                         xycoords='figure fraction')
+        self.ax[0] = plt.axes(xlim=(0, self.qg.num_v), ylim=(-1000, 1000))
+        self.ax[1] = plt.axes(xlim=(0, self.qg.num_v), ylim=(-1000, 1000))
+        self.line1, = self.ax[0].plot([], [], lw=1)
+        self.line2, = self.ax[1].plot([], [], lw=1)
 
 
         fc = FigureCanvas(self.fig)
@@ -104,18 +107,21 @@ class WaveBox2D(Gtk.VBox):
 
 
     def init_plot(self):
-        self.line.set_data([], [])
-        return self.line, self.timestamp
+        self.line1.set_data([], [])
+        self.line2.set_data([], [])
+        return self.line1, self.line2, self.timestamp
 
-    def animate(self):
+    def animate(self, i):
         if not self.paused:
             self.qg.update_graph()
             self.qg.set_alpha(self.button_alpha.get_value())
             self.timestamp.set_text('timestep = ' + str(self.qg.timestep))
         x = np.linspace(0, self.qg.num_v, self.qg.num_v)
-        y = self.qg.X['position'].a
-        self.line.set_data(x, y)
-        return self.line, self.timestamp
+        y1 = self.qg.X['position'].a
+        self.line1.set_data(x, y1)
+        y2 = self.qg.X['velocity'].a
+        self.line2.set_data(x, y2)
+        return self.line1, self.line2, self.timestamp
 
 
 class WaveBox3D(Gtk.VBox):
@@ -153,7 +159,7 @@ class WaveBox3D(Gtk.VBox):
         self.qg = qg.QuantumGraph.init_lattice_2d_4n(initial_states_2d,
                                                      [('velocity', 'position', 1, -1)],
                                 dt = 1, alpha = 1/5, periodic=True)
-        self.fig = Figure()
+        self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
         self.ax.set_xlim3d([0, 50])
         self.ax.set_xlabel('X')
@@ -188,7 +194,6 @@ class WaveBox3D(Gtk.VBox):
 
     def animate_wireframe(self, i):
         if not self.paused:
-            print('a ', i)
             self.qg.update_graph()
             self.plot3d.remove()
             self.plot3d = self.ax.plot_surface(self.x2, self.y2,
