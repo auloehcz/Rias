@@ -240,6 +240,7 @@ class Box2D(Gtk.VBox):
         self.controls['checkbutton_periodic'] = Gtk.CheckButton.new_with_label("Periodic")
         self.controls["button_set_graph"] = Gtk.Button.new_with_label("Set Graph")
         self.controls['button_set_graph'].connect("clicked", self.set_graph_lattice)
+
         self.grid_lattice_controls.attach(self.controls['entry_shape'], 3, 1, 1, 1)
         self.grid_lattice_controls.attach(self.controls['entry_max_radius'], 3, 1, 1, 1)
         self.grid_lattice_controls.attach(self.controls['checkbutton_periodic'], 4, 1, 1, 1)
@@ -247,6 +248,9 @@ class Box2D(Gtk.VBox):
 
         self.grid_controls.attach(self.grid_lattice_controls, 1, 4, 1, 1)
         self.show_all()
+
+    def find_lattice_edges(self, shape, max_radius):
+
 
     def set_graph_lattice(self, button):
         periodic = self.controls['checkbutton_periodic'].get_active()
